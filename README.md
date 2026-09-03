@@ -81,6 +81,18 @@ Open `http://localhost:5173` in two browser windows to test matching and video c
 | --- | --- |
 | `npm start` | Start the Socket.IO server |
 
+## Verify changes locally
+
+Run the frontend checks before opening a pull request:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+To test matching and chat manually, start the backend and frontend, then open the frontend URL in two separate browser windows. Use different browser profiles if camera permissions or existing Socket.IO sessions interfere with the test.
+
 ## Development notes
 
 - The frontend currently connects to `http://localhost:5000` from `frontend/src/socket/socket.js`.
