@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import SimplePeer from "simple-peer";
 import socket from "../socket/socket";
 
 export default function VideoChat() {
   const videoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const peerRef = useRef(null);
+  const localStreamRef = useRef(null);
 
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(socket.connected);
   const [onlineUsers, setOnlineUsers] = useState(0);
   const [message, setMessage] = useState("");
   const [matchStatus, setMatchStatus] = useState("🔍 Searching...");
@@ -28,6 +32,8 @@ export default function VideoChat() {
           audio: false,
         });
 
+        localStreamRef.current = stream;
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -38,8 +44,45 @@ export default function VideoChat() {
 
     startCamera();
 
+    const createPeer = (initiator = false) => {
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+
+      try {
+        const peer = new SimplePeer({
+          initiator: !!initiator,
+          trickle: false,
+          stream: localStreamRef.current,
+        });
+
+        peer.on("signal", (data) => {
+          socket.emit("signal", data);
+        });
+
+        peer.on("stream", (remoteStream) => {
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+        });
+
+        peer.on("close", () => {
+          peerRef.current = null;
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+        });
+
+        peer.on("error", (err) => {
+          console.error("Peer error:", err);
+        });
+
+        peerRef.current = peer;
+      } catch (err) {
+        console.error("Failed to create peer:", err);
+      }
+    };
+
     if (socket.connected) {
-      setConnected(true);
       socket.emit("join-queue", interest);
     }
 
@@ -80,6 +123,25 @@ export default function VideoChat() {
       ]);
     });
 
+    // Receive WebRTC signaling data from the server (relayed from partner)
+    socket.on("signal", (data) => {
+      try {
+        const signal = data?.signal ?? data;
+        if (peerRef.current) {
+          peerRef.current.signal(signal);
+        } else {
+          // If peer isn't created yet, create as non-initiator and then signal
+          createPeer(false);
+          // give peer a moment to be ready then signal
+          setTimeout(() => {
+            if (peerRef.current) peerRef.current.signal(signal);
+          }, 100);
+        }
+      } catch (err) {
+        console.error("Error applying signal:", err);
+      }
+    });
+
     socket.on("partner-left", () => {
       setPartnerConnected(false);
       setMatchStatus("🔍 Searching...");
@@ -91,6 +153,18 @@ export default function VideoChat() {
           sender: "other",
         },
       ]);
+
+      // Clean up peer connection and remote video
+      try {
+        if (peerRef.current) {
+          peerRef.current.destroy();
+          peerRef.current = null;
+        }
+      } catch (e) {
+        console.error("Error destroying peer:", e);
+      }
+
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     });
 
     return () => {
@@ -100,6 +174,16 @@ export default function VideoChat() {
       socket.off("matched");
       socket.off("receive-message");
       socket.off("partner-left");
+      socket.off("signal");
+
+      try {
+        if (peerRef.current) {
+          peerRef.current.destroy();
+          peerRef.current = null;
+        }
+      } catch (e) {
+        console.error("Error destroying peer on cleanup:", e);
+      }
     };
   }, [interest]);
 
@@ -169,6 +253,8 @@ export default function VideoChat() {
         <div className="w-[70%] p-4">
 
           <div className="h-full rounded-3xl border border-zinc-800 bg-zinc-900 relative overflow-hidden">
+
+            <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
 
             <div className="absolute inset-0 flex flex-col items-center justify-center">
 

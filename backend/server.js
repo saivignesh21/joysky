@@ -71,10 +71,12 @@ io.on("connection", (socket) => {
 
       io.to(currentUser.socketId).emit("matched", {
         partner: partner.socketId,
+        initiator: true,
       });
 
       io.to(partner.socketId).emit("matched", {
         partner: currentUser.socketId,
+        initiator: false,
       });
 
       console.log(
@@ -111,6 +113,14 @@ io.on("connection", (socket) => {
         socketId: socket.id,
         interest: "General",
       });
+    }
+  });
+
+  socket.on("signal", (data) => {
+    const partnerId = activePairs[socket.id];
+    if (partnerId) {
+      // Relay raw signaling data to the paired socket
+      io.to(partnerId).emit("signal", { signal: data });
     }
   });
 
