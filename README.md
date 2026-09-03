@@ -93,6 +93,14 @@ npm run build
 
 To test matching and chat manually, start the backend and frontend, then open the frontend URL in two separate browser windows. Use different browser profiles if camera permissions or existing Socket.IO sessions interfere with the test.
 
+## How the application works
+
+1. The React client connects to the Socket.IO server on port `5000`.
+2. Users join an interest-based queue from the video-chat page.
+3. The server pairs users with the same interest and relays chat messages.
+4. Once paired, the clients exchange WebRTC signaling data through Socket.IO.
+5. The media stream stays between the two browsers; the server only coordinates the connection.
+
 ## Development notes
 
 - The frontend currently connects to `http://localhost:5000` from `frontend/src/socket/socket.js`.
